@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Money Heist: P2P Battle</title>
+    <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;700&family=Montserrat:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        :root { 
+            --bg: #0f0d0b; --accent: #7c1510; --cream: #e2d6c7; 
+            --green: #2ecc71; --red: #e74c3c; --blue: #3498db; 
+            --yellow: #f1c40f; --orange: #e67e22; 
+        }
+        * { box-sizing: border-box; user-select: none; }
+        
+        body { 
+            background: var(--bg); color: var(--cream); font-family: 'Montserrat', sans-serif; 
+            margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+            overflow-x: hidden;
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        h1, h2, h3 { font-family: 'Oswald', sans-serif; text-transform: uppercase; margin: 0 0 10px 0; }
+        button { cursor: pointer; font-family: 'Oswald', sans-serif; text-transform: uppercase; font-weight: bold; }
+
+        /* SCREENS */
+        .screen { display: none; width: 100%; max-width: 600px; flex-direction: column; align-items: center; z-index: 10; }
+        .screen.active { display: flex; }
+
+        /* LOBBY */
+        .card { background: rgba(255,255,255,0.05); padding: 30px; border: 1px solid rgba(255,255,255,0.1); width: 100%; text-align: center; border-radius: 8px; }
+        input { background: #222; border: 1px solid #444; color: white; padding: 10px; width: 100%; margin: 10px 0; font-family: monospace; text-align: center; font-size: 1.2rem; }
+        .big-btn { width: 100%; padding: 15px; background: var(--accent); color: white; border: none; font-size: 1.2rem; margin-top: 10px; transition: 0.2s; border-radius: 4px; }
+        .big-btn:hover { background: #9c2820; }
+        
+        /* SETUP */
+        .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; width: 100%; aspect-ratio: 1; margin: 20px 0; }
+        .cell { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #444; cursor: pointer; position: relative; font-family: 'Oswald', sans-serif; }
+        .cell.occupied { background: #555 !important; border-color: #777; }
+        .cell.preview { background: #333; }
+
+        /* GAMEPLAY STYLES */
+        .radar .cell:hover { background: rgba(231, 76, 60, 0.3); }
+        .radar .cell.hit { background: var(--red) !important; color: white; border: 1px solid rgba(255,255,255,0.4); } 
+        .radar .cell.miss { background: var(--green) !important; opacity: 0.5; color: black; } 
+        .radar .cell.pending { background: var(--yellow) !important; animation: pulse 2s infinite; }
+
+        .fleet .cell.hit { background: var(--red) !important; border: 2px solid white; z-index: 2; } 
+        .fleet .cell.miss { background: var(--blue) !important; opacity: 0.5; } 
+
+        /* HUD */
+        .hud { display: flex; justify-content: space-between; width: 100%; padding: 15px; background: #1a1815; margin-bottom: 10px; border-bottom: 2px solid var(--accent); border-radius: 4px; }
+        .turn-badge { padding: 5px 15px; background: #333; color: #888; border-radius: 4px; font-family: 'Oswald', sans-serif; }
+        .turn-badge.active { background: var(--green); color: black; animation: pulse 1s infinite; }
+
+        .log { margin-top: 10px; color: #666; font-size: 0.9rem; font-family: monospace; text-align: center; }
+        .copy-box { user-select: text; background: #000; padding: 10px; border: 1px dashed #555; margin: 10px 0; word-break: break-all; cursor: pointer; color: var(--green); }
+
+        /* --- ANIMATION OVERLAY STYLES --- */
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.92); display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 9999; opacity: 0; pointer-events: none; transition: opacity 0.3s;
+        }
+        .overlay.active { opacity: 1; }
+        
+        .overlay-coord { font-family: 'Oswald', sans-serif; font-size: 30vw; font-weight: 700; color: var(--cream); line-height: 0.8; }
+        .overlay-status { font-family: 'Oswald', sans-serif; font-size: 5vw; text-transform: uppercase; margin-top: 2vh; letter-spacing: 2px; text-align: center; }
+        
+        /* Message Colors */
+        .status-hit { color: var(--red); }
+        .status-miss { color: var(--green); }
+        .status-pending { color: var(--yellow); }
+        
+        /* DEFENSIVE ALERT COLORS (When I get hit) */
+        .status-def-alert { color: var(--orange); text-shadow: 0 0 20px var(--orange); animation: pulse 0.5s infinite; }
+        .status-def-hit { color: var(--red); text-shadow: 0 0 30px red; font-weight: bold; }
+        .status-def-miss { color: #3498db; }
+
+        /* Screen Flash for Damage */
+        body.damage-flash .overlay { background: rgba(120, 0, 0, 0.95); }
+        @keyframes pulse { 0% { opacity: 0.8; } 50% { opacity: 0.5; } 100% { opacity: 0.8; } }
+
+    </style>
+</head>
+<body>
+
+    <div class="overlay" id="anim-overlay">
+        <div class="overlay-coord" id="anim-text">A1</div>
+        <div class="overlay-status" id="anim-status">...</div>
+    </div>
+
+    <div id="screen-lobby" class="screen active">
+        <h1>HEIST COMMAND</h1>
+        <div class="card">
+            <h3>Start New Operation</h3>
+            <button class="big-btn" onclick="createGame()">Create Game (Host)</button>
+            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #333;">
+            <h3>Join Existing</h3>
+            <input type="text" id="join-id" placeholder="Paste Game ID Here">
+            <button class="big-btn" onclick="joinGame()">Join Game</button>
+        </div>
+        <div class="log">Secure P2P Connection</div>
+    </div>
+
+    <div id="screen-wait" class="screen">
+        <h1>AWAITING UPLINK</h1>
+        <div class="card">
+            <p>Send this ID to your friend:</p>
+            <div class="copy-box" id="host-id-display" onclick="copyId()">Generating...</div>
+            <p style="font-size: 0.8rem; color: #888;">Waiting for connection...</p>
+        </div>
+    </div>
+
+    <div id="screen-setup" class="screen">
+        <div class="hud">
+            <span>DEPLOY FLEET</span>
+            <span id="setup-instruction">Place Ship Size: 5</span>
+        </div>
+        
+        <div class="grid" id="setup-grid"></div>
+        
+        <div style="display:flex; gap:10px; width: 100%;">
+            <button class="big-btn" style="background:#d35400" onclick="toggleAxis()">Rotate: <span id="axis-display">HORIZ</span></button>
+            <button class="big-btn" style="background:#333" onclick="resetSetup()">Reset</button>
+        </div>
+        <button class="big-btn" id="confirm-btn" style="display:none; background: var(--green); color: black; margin-top: 10px;" onclick="finalizeSetup()">CONFIRM DEPLOYMENT</button>
+        <div class="log" id="setup-log"></div>
+    </div>
+
+    <div id="screen-game" class="screen">
+        <div class="hud">
+            <span id="my-role">TEAM ?</span>
+            <span id="turn-indicator" class="turn-badge">WAITING</span>
+        </div>
+
+        <h3 style="color:#888; font-size: 0.8rem; margin-top: 10px;">RADAR (ATTACK ENEMY)</h3>
+        <div class="grid radar" id="radar-grid"></div>
+
+        <h3 style="color:#888; font-size: 0.8rem; margin-top: 20px;">MY FLEET (DEFEND)</h3>
+        <div class="grid fleet" id="fleet-grid"></div>
+
+        <div class="log" id="game-log">System Ready.</div>
+    </div>
+
+    <script>
+        // --- ANIMATION LOGIC ---
+        function playAnimation(coord, result, isIncoming = false) {
+            const overlay = document.getElementById('anim-overlay');
+            const text = document.getElementById('anim-text');
+            const status = document.getElementById('anim-status');
+            const body = document.body;
+
+            text.innerText = coord;
+            body.classList.remove('damage-flash');
+
+            if (isIncoming) {
+                // DEFENSIVE MODE (Someone shot AT me)
+                if (result === 'hit') {
+                    status.innerText = `CRITICAL ALERT: WE ARE HIT!`;
+                    status.className = `overlay-status status-def-hit`;
+                    body.classList.add('damage-flash'); 
+                } else {
+                    status.innerText = `REPORT: ENEMY MISSED`;
+                    status.className = `overlay-status status-def-miss`;
+                }
+            } else {
+                // OFFENSIVE MODE (I shot THEM)
+                if(result === 'pending') {
+                    status.innerText = `FIRING ON ${coord}...`;
+                    status.className = `overlay-status status-pending`;
+                } else if(result === 'hit') {
+                    status.innerText = `TARGET DESTROYED: ${coord}`;
+                    status.className = `overlay-status status-hit`;
+                } else {
+                    status.innerText = `SHOT MISSED: ${coord}`;
+                    status.className = `overlay-status status-miss`;
+                }
+            }
+
+            overlay.classList.add('active');
+            
+            // Hide after 3s to let gameplay continue
+            setTimeout(() => { 
+                overlay.classList.remove('active'); 
+                body.classList.remove('damage-flash');
+            }, 3000);
+        }
+
+        // --- GAME STATE ---
+        let peer = null;
+        let conn = null;
+        let mySide = ''; // 'host' or 'client'
+        let myTurn = false;
+        
+        const rows = ['A','B','C','D','E','F','G','H'];
+        const cols = 12;
+        
+        // Setup State
+        const shipsToPlace = [5, 4, 3, 3, 2];
+        let currentShipIdx = 0;
+        let isHorizontal = true;
+        let myShipCoords = new Set(); 
+        let isReady = false;
+        let opponentReady = false;
+
+        // --- 1. PEER JS CONNECTION ---
+        function initPeer(id = null) {
+            peer = new Peer(id);
+            peer.on('open', (id) => {
+                if(mySide === 'host') {
+                    document.getElementById('host-id-display').innerText = id;
+                    switchScreen('screen-wait');
+                }
+            });
+            peer.on('connection', (c) => {
+                conn = c;
+                setupConnection();
+                alert("OPPONENT CONNECTED! MOVING TO SETUP.");
+                switchScreen('screen-setup');
+                initSetupGrid();
+            });
+            peer.on('error', (err) => alert("Connection Error: " + err));
+        }
+
+        function createGame() {
+            mySide = 'host';
+            myTurn = true; 
+            initPeer(); 
+        }
+
+        function joinGame() {
+            const destId = document.getElementById('join-id').value.trim();
+            if(!destId) return alert("Enter Game ID");
+            mySide = 'client';
+            myTurn = false;
+            peer = new Peer(); 
+            peer.on('open', () => {
+                conn = peer.connect(destId);
+                setupConnection();
+                switchScreen('screen-setup');
+                initSetupGrid();
+            });
+        }
+
+        function setupConnection() {
+            conn.on('data', (data) => handleData(data));
+        }
+
+        function send(data) {
+            if(conn && conn.open) conn.send(data);
+        }
+
+        // --- 2. DATA HANDLING (The "Server" Logic) ---
+        function handleData(data) {
+            console.log("Received:", data);
+
+            // A. Opponent is Ready
+            if(data.type === 'READY') {
+                opponentReady = true;
+                document.getElementById('setup-log').innerText = "OPPONENT IS READY...";
+                checkStartGame();
+            }
+
+            // B. Opponent Fired at Me (INCOMING)
+            if(data.type === 'FIRE') {
+                const coord = data.coord;
+                const isHit = myShipCoords.has(coord);
+                
+                // Trigger Visuals for Incoming
+                playAnimation(coord, isHit ? 'hit' : 'miss', true);
+
+                // Update my fleet view
+                setTimeout(() => {
+                    const cell = document.getElementById(`fleet-${coord}`);
+                    if(cell) cell.classList.add(isHit ? 'hit' : 'miss');
+                }, 1000); // Slight delay so animation plays first
+
+                log(`INCOMING AT ${coord}: ${isHit ? "HIT!" : "MISS"}`);
+                
+                // Reply with result
+                send({ type: 'RESULT', coord: coord, hit: isHit });
+                setTurn(true);
+            }
+
+            // C. Result of My Shot (OUTGOING)
+            if(data.type === 'RESULT') {
+                const coord = data.coord;
+                const isHit = data.hit;
+                
+                // Trigger Visuals for Result
+                playAnimation(coord, isHit ? 'hit' : 'miss', false);
+
+                // Update grid behind overlay
+                const cell = document.getElementById(`radar-${coord}`);
+                if(cell) {
+                    cell.classList.remove('pending');
+                    cell.classList.add(isHit ? 'hit' : 'miss');
+                }
+                
+                log(`SHOT AT ${coord}: ${isHit ? "TARGET HIT!" : "MISSED"}`);
+            }
+        }
+
+        // --- 3. SETUP LOGIC ---
+        function initSetupGrid() {
+            const grid = document.getElementById('setup-grid');
+            grid.innerHTML = '';
+            rows.forEach(r => {
+                for(let c=1; c<=cols; c++) {
+                    let d = document.createElement('div');
+                    d.className = 'cell';
+                    d.dataset.c = `${r}${c}`;
+                    d.innerText = `${r}${c}`;
+                    d.onclick = () => tryPlaceShip(r, c);
+                    d.onmouseenter = () => previewShip(r, c, true);
+                    d.onmouseleave = () => previewShip(r, c, false);
+                    grid.appendChild(d);
+                }
+            });
+        }
+
+        function tryPlaceShip(r, c) {
+            if(currentShipIdx >= shipsToPlace.length) return;
+            const size = shipsToPlace[currentShipIdx];
+            const coords = getCoords(r, c, size);
+            if(!coords) return; 
+            for(let co of coords) if(myShipCoords.has(co)) return alert("Overlap!");
+
+            coords.forEach(co => {
+                myShipCoords.add(co);
+                document.querySelector(`.cell[data-c="${co}"]`).classList.add('occupied');
+            });
+
+            currentShipIdx++;
+            updateSetupUI();
+        }
+
+        function previewShip(r, c, active) {
+            if(currentShipIdx >= shipsToPlace.length) return;
+            const coords = getCoords(r, c, shipsToPlace[currentShipIdx]);
+            if(coords) {
+                coords.forEach(co => {
+                    const el = document.querySelector(`.cell[data-c="${co}"]`);
+                    if(el && !el.classList.contains('occupied')) {
+                        active ? el.classList.add('preview') : el.classList.remove('preview');
+                    }
+                });
+            }
+        }
+
+        function getCoords(r, c, size) {
+            let res = [];
+            let rIdx = rows.indexOf(r);
+            for(let i=0; i<size; i++) {
+                if(isHorizontal) {
+                    if(c + i > cols) return null;
+                    res.push(`${r}${c+i}`);
+                } else {
+                    if(rIdx + i >= rows.length) return null;
+                    res.push(`${rows[rIdx+i]}${c}`);
+                }
+            }
+            return res;
+        }
+
+        function updateSetupUI() {
+            if(currentShipIdx >= shipsToPlace.length) {
+                document.getElementById('setup-instruction').innerText = "FLEET READY";
+                document.getElementById('confirm-btn').style.display = 'block';
+            } else {
+                document.getElementById('setup-instruction').innerText = `Place Size: ${shipsToPlace[currentShipIdx]}`;
+            }
+        }
+
+        function toggleAxis() {
+            isHorizontal = !isHorizontal;
+            document.getElementById('axis-display').innerText = isHorizontal ? "HORIZ" : "VERT";
+        }
+
+        function resetSetup() {
+            myShipCoords.clear();
+            currentShipIdx = 0;
+            initSetupGrid();
+            document.getElementById('confirm-btn').style.display = 'none';
+        }
+
+        function finalizeSetup() {
+            isReady = true;
+            document.getElementById('confirm-btn').disabled = true;
+            document.getElementById('confirm-btn').innerText = "WAITING FOR OPPONENT...";
+            send({ type: 'READY' });
+            checkStartGame();
+        }
+
+        function checkStartGame() {
+            if(isReady && opponentReady) {
+                initGameScreen();
+                switchScreen('screen-game');
+            }
+        }
+
+        // --- 4. GAMEPLAY LOGIC ---
+        function initGameScreen() {
+            document.getElementById('my-role').innerText = mySide === 'host' ? "TEAM 1 (PROFESSOR)" : "TEAM 2 (POLICE)";
+            buildGameGrid('radar-grid', 'radar');
+            buildGameGrid('fleet-grid', 'fleet');
+            myShipCoords.forEach(co => {
+                document.getElementById(`fleet-${co}`).style.background = '#555';
+            });
+            setTurn(myTurn);
+        }
+
+        function buildGameGrid(id, type) {
+            const el = document.getElementById(id);
+            el.innerHTML = '';
+            rows.forEach(r => {
+                for(let c=1; c<=cols; c++) {
+                    let d = document.createElement('div');
+                    d.className = 'cell';
+                    d.id = `${type}-${r}${c}`;
+                    d.innerText = `${r}${c}`;
+                    if(type === 'radar') d.onclick = () => fire(r, c);
+                    el.appendChild(d);
+                }
+            });
+        }
+
+        function fire(r, c) {
+            if(!myTurn) { log("WAIT YOUR TURN!"); return; }
+            const coord = `${r}${c}`;
+            const cell = document.getElementById(`radar-${coord}`);
+            
+            if(cell.classList.contains('hit') || cell.classList.contains('miss') || cell.classList.contains('pending')) return;
+
+            // Trigger "Firing..." Animation
+            playAnimation(coord, 'pending', false);
+            
+            cell.classList.add('pending'); // Mark grid as pending
+            setTurn(false);
+            
+            // Send Data
+            send({ type: 'FIRE', coord: coord });
+        }
+
+        function setTurn(isMine) {
+            myTurn = isMine;
+            const ind = document.getElementById('turn-indicator');
+            if(isMine) {
+                ind.innerText = "YOUR TURN";
+                ind.classList.add('active');
+            } else {
+                ind.innerText = "ENEMY TURN";
+                ind.classList.remove('active');
+            }
+        }
+
+        // --- UTILS ---
+        function switchScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+        function log(msg) { document.getElementById('game-log').innerText = "> " + msg; }
+        function copyId() {
+            const txt = document.getElementById('host-id-display').innerText;
+            navigator.clipboard.writeText(txt);
+            alert("ID Copied!");
+        }
+    </script>
+</body>
+</html>
