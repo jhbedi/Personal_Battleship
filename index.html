@@ -3,164 +3,212 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>THE BATTLESHIP</title>
+    <title>THE BATTLESHIP: HEIST EDITION</title>
     <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;700&family=Montserrat:wght@300;400;700&display=swap" rel="stylesheet">
     <style>
         :root { 
             --bg: #0f0d0b; --accent: #7c1510; --cream: #e2d6c7; 
-            --green: #2ecc71; --red: #e74c3c; --blue: #3498db; 
-            --yellow: #f1c40f; 
+            --green: #27ae60; --red: #c0392b; --blue: #2980b9; 
+            --yellow: #f39c12; 
         }
         * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
         
         body { 
             background: var(--bg); color: var(--cream); font-family: 'Montserrat', sans-serif; 
-            margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; height: 100vh;
+            margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; height: 100vh; width: 100vw;
             overflow: hidden; 
-            background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
             background-size: 40px 40px;
-            transition: background 0.2s;
         }
 
-        /* --- TYPOGRAPHY RESTORATION --- */
-        h1, h2, h3, button, .big-text { font-family: 'Oswald', sans-serif; text-transform: uppercase; }
-        
+        h1, h2, h3, button { font-family: 'Oswald', sans-serif; text-transform: uppercase; }
         button { cursor: pointer; font-weight: bold; letter-spacing: 1px; }
 
-        /* SCREENS */
-        .screen { display: none; width: 100%; height: 100%; flex-direction: column; align-items: center; padding: 10px; z-index: 10; }
+        /* --- SCREENS --- */
+        .screen { display: none; width: 100%; height: 100%; flex-direction: column; align-items: center; padding: 15px; z-index: 10; }
         .screen.active { display: flex; }
 
-        /* LOBBY */
+        /* LOBBY CARD */
         .card { 
-            background: rgba(255,255,255,0.05); padding: 30px; border: 1px solid rgba(255,255,255,0.1); 
-            width: 100%; max-width: 400px; text-align: center; border-radius: 8px; margin-top: 15vh;
+            background: rgba(20, 20, 20, 0.9); 
+            padding: 30px; border: 1px solid rgba(255,255,255,0.05); 
+            width: 100%; max-width: 400px; text-align: center; border-radius: 4px; margin-top: 10vh;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
+
         input { 
-            background: #222; border: 1px solid #444; color: white; padding: 15px; width: 100%; 
-            margin: 10px 0; font-family: 'Montserrat', sans-serif; text-align: center; font-size: 1.2rem; 
+            background: #111; border: 1px solid #333; color: var(--cream); padding: 15px; width: 100%; 
+            margin: 10px 0; font-family: 'Oswald', sans-serif; text-align: center; font-size: 1.5rem; 
+            letter-spacing: 2px; text-transform: uppercase; border-radius: 2px;
         }
+        input:focus { outline: none; border-color: var(--accent); }
+
         .big-btn { 
             width: 100%; padding: 15px; background: var(--accent); color: white; border: none; 
-            font-size: 1.5rem; margin-top: 10px; border-radius: 4px; transition: 0.2s; 
+            font-size: 1.2rem; margin-top: 10px; border-radius: 2px; transition: 0.2s; 
         }
         .big-btn:active { transform: scale(0.98); }
         .big-btn:disabled { background: #333; color: #777; cursor: not-allowed; }
 
-        /* --- SMART GRID FITTING --- */
-        .game-view { display: none; width: 100%; flex-direction: column; align-items: center; flex: 1; height: 100%; }
+        /* --- RESPONSIVE GRID LAYOUT --- */
+        .game-view { display: none; width: 100%; flex-direction: column; align-items: center; flex: 1; height: 100%; min-height: 0; }
         .game-view.active { display: flex; }
 
         .grid-wrapper {
             flex: 1; width: 100%; display: flex; align-items: center; justify-content: center;
-            padding: 5px; overflow: hidden; min-height: 0;
+            padding: 10px; overflow: hidden; min-height: 0; position: relative;
         }
 
         .grid { 
             display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; 
-            width: 100%; height: 100%; max-width: 100%; max-height: 100%; aspect-ratio: 1;
+            width: 100%; height: 100%; 
+            max-width: 100%; max-height: 100%; 
+            aspect-ratio: 1/1;
         }
 
         .cell { 
-            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); 
+            background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); 
             display: flex; align-items: center; justify-content: center; 
-            font-size: clamp(8px, 1.5vmin, 16px); color: #555; position: relative; 
-            font-family: 'Oswald', sans-serif; transition: 0.2s;
+            font-size: clamp(8px, 1.5vmin, 14px); color: #444; position: relative; 
+            font-family: 'Oswald', sans-serif; transition: 0.1s; border-radius: 2px;
         }
 
-        /* CELL STATES */
-        .cell.occupied { background: #555 !important; border-color: #777; color: #fff; }
-        .cell.preview { background: #333 !important; border: 1px dashed #999; }
+        /* --- CLEANER STATES (No Excess Glow) --- */
         
-        /* Radar */
-        .radar .cell:active { background: rgba(231, 76, 60, 0.3); }
-        .radar .cell.hit { background: var(--red) !important; color: white; border: 1px solid white; box-shadow: 0 0 10px var(--red); z-index: 5; }
-        .radar .cell.miss { background: var(--green) !important; opacity: 0.4; color: black; }
-        .radar .cell.pending { background: var(--yellow) !important; animation: pulse 0.5s infinite; }
+        /* Setup */
+        .cell.occupied { background: #444 !important; border: 1px solid #666; }
+        .cell.preview { background: #333 !important; border: 1px dashed var(--yellow); opacity: 0.8; }
 
-        /* Fleet */
-        .fleet .cell.my-ship { background: #444; border: 1px solid #666; }
-        .fleet .cell.hit { background: var(--red) !important; border: 2px solid white; z-index: 2; }
-        .fleet .cell.miss { background: var(--blue) !important; opacity: 0.3; }
+        /* Hits - Flat, Matte Red */
+        .cell.hit { 
+            background: var(--red) !important; 
+            color: white; 
+            border: 1px solid rgba(255,255,255,0.5); 
+            z-index: 2;
+        }
 
-        /* HUD & TABS */
-        .hud { width: 100%; max-width: 600px; display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 2px solid var(--accent); margin-bottom: 5px; flex-shrink: 0; background: rgba(0,0,0,0.5); }
+        /* Misses - Flat Green/Blue */
+        .cell.miss { 
+            background: rgba(46, 204, 113, 0.15) !important; 
+            color: transparent; /* Hide text for cleaner look */
+            border: 1px solid rgba(46, 204, 113, 0.3);
+        }
+        /* Add a dot for misses */
+        .cell.miss::after {
+            content: ''; width: 6px; height: 6px; background: var(--green); border-radius: 50%; opacity: 0.5;
+        }
+
+        /* Pending */
+        .cell.pending { 
+            background: rgba(241, 196, 15, 0.2) !important; 
+            border: 1px dashed var(--yellow);
+        }
+
+        /* --- HUD --- */
+        .hud { 
+            width: 100%; max-width: 600px; display: flex; justify-content: space-between; align-items: center; 
+            padding: 10px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 5px; flex-shrink: 0; 
+            background: #151515; border-radius: 4px;
+        }
+        
         .tab-controls { display: flex; width: 100%; max-width: 600px; gap: 5px; padding: 5px; flex-shrink: 0; }
-        .tab-btn { flex: 1; padding: 15px; background: #222; color: #666; border: 1px solid #333; font-size: 1.2rem; font-family: 'Oswald', sans-serif; }
+        .tab-btn { 
+            flex: 1; padding: 12px; background: #1a1a1a; color: #666; 
+            border: 1px solid #333; font-size: 1rem; border-radius: 2px; transition: 0.2s;
+        }
         .tab-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
-        
-        /* COPY BOX */
+
         .id-box {
             font-size: 2rem; font-family: 'Oswald', sans-serif; color: var(--green); 
-            border: 2px dashed #555; padding: 20px; margin: 15px 0; 
-            cursor: pointer; user-select: text; transition: 0.3s;
+            border: 1px solid #333; padding: 20px; margin: 15px 0; border-radius: 4px;
+            cursor: pointer; user-select: text; transition: 0.2s; background: #111;
         }
-        .id-box:hover { background: rgba(46, 204, 113, 0.1); border-color: var(--green); }
+        .id-box:hover { background: #1a1a1a; border-color: var(--green); }
 
-        /* --- CINEMATIC ANIMATION OVERLAY --- */
+        /* --- OVERLAY --- */
         .overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.92); display: flex; flex-direction: column; align-items: center; justify-content: center;
-            z-index: 9999; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(5px);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 9999; opacity: 0; pointer-events: none; transition: opacity 0.3s;
         }
-        .overlay.active { opacity: 1; }
+        .overlay.active { opacity: 1; pointer-events: auto; }
         
         .overlay-coord { 
-            font-family: 'Oswald', sans-serif; font-size: 25vw; font-weight: 700; 
-            color: var(--cream); line-height: 0.8; text-shadow: 0 0 30px rgba(255,255,255,0.1);
+            font-family: 'Oswald', sans-serif; font-size: 20vw; font-weight: 700; 
+            color: #eee; line-height: 0.8; 
         }
         .overlay-status { 
-            font-family: 'Oswald', sans-serif; font-size: 6vw; text-transform: uppercase; 
-            margin-top: 20px; letter-spacing: 5px; text-align: center; 
+            font-family: 'Oswald', sans-serif; font-size: 8vw; text-transform: uppercase; 
+            margin-top: 10px; letter-spacing: 2px; text-align: center; font-weight: bold;
         }
         
-        .status-hit { color: var(--red); text-shadow: 0 0 50px var(--red); }
-        .status-miss { color: var(--blue); text-shadow: 0 0 20px var(--blue); }
-        .status-sunk { color: var(--red); border: 10px solid var(--red); padding: 20px 40px; background: black; text-shadow: 0 0 30px red; }
-        .status-win { color: var(--green); text-shadow: 0 0 50px var(--green); }
+        .status-hit { color: var(--red); }
+        .status-miss { color: var(--blue); }
         
-        /* Flash Screen on Hit */
-        body.damage-flash .overlay { background: rgba(180, 0, 0, 0.95); }
+        /* VICTORY/DEFEAT PERMANENT SCREEN */
+        .status-win { 
+            color: var(--yellow); font-size: 10vw; 
+            animation: victory-scale 0.8s ease-out forwards;
+        }
 
-        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+        .status-sunk {
+            color: var(--red); font-size: 8vw; border: 4px solid var(--red); padding: 10px 30px;
+            background: rgba(0,0,0,0.9); transform: rotate(-5deg);
+        }
+
+        .restart-btn {
+            margin-top: 30px; padding: 15px 30px; background: transparent; 
+            border: 1px solid #555; color: #fff; font-size: 1.2rem; display: none;
+        }
+        .restart-btn.visible { display: block; }
+        .restart-btn:hover { background: white; color: black; }
+
+        @keyframes victory-scale { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
     </style>
 </head>
 <body>
 
+    <!-- ANIMATION LAYER -->
     <div class="overlay" id="anim-overlay">
         <div class="overlay-coord" id="anim-main"></div>
         <div class="overlay-status" id="anim-sub"></div>
+        <button class="restart-btn" id="restart-btn" onclick="location.reload()">RELOAD TO PLAY AGAIN</button>
     </div>
 
+    <!-- 1. LOBBY -->
     <div id="screen-lobby" class="screen active">
         <h1 style="font-size: 4rem; color: var(--accent); margin-bottom: 0;">BATTLESHIP</h1>
-        <div style="font-size: 1rem; color: #666; letter-spacing: 3px; margin-bottom: 20px;">TACTICAL P2P WARFARE</div>
+        <div style="font-size: 0.9rem; color: #666; letter-spacing: 4px; margin-bottom: 20px;">TACTICAL P2P WARFARE</div>
+        
         <div class="card">
-            <h3>Start Mission</h3>
+            <h3 style="color: var(--cream);">Start Mission</h3>
             <button class="big-btn" onclick="hostGame()">Create Room</button>
-            <div style="margin: 20px; color: #666; font-family: 'Oswald', sans-serif;">- OR -</div>
-            <h3>Join Crew</h3>
-            <input type="text" id="join-id" placeholder="ENTER ROOM ID">
-            <button class="big-btn" onclick="joinGame()">Connect</button>
+            <div style="margin: 20px; color: #444; font-size: 0.8rem;">— OR JOIN CREW —</div>
+            <input type="text" id="join-id" placeholder="ENTER ID">
+            <button class="big-btn" id="join-btn" onclick="joinGame()">Connect</button>
         </div>
     </div>
 
+    <!-- 2. WAITING ROOM -->
     <div id="screen-wait" class="screen">
-        <h1 style="margin-top: 20vh;">UPLINK READY</h1>
+        <h1 style="margin-top: 15vh; color: var(--green);">UPLINK READY</h1>
         <div class="card">
-            <p style="color:#888;">CLICK TO COPY CODE:</p>
+            <p style="color:#888; font-size: 0.9rem;">TAP BOX TO COPY CODE:</p>
             <div id="host-id-display" class="id-box" onclick="copyId()">Generating...</div>
             <div id="wait-msg">WAITING FOR OPPONENT...</div>
         </div>
     </div>
 
+    <!-- 3. SETUP -->
     <div id="screen-setup" class="screen">
         <div class="hud">
-            <span>DEPLOY: <strong id="ship-name-display" style="color:var(--yellow)">...</strong></span>
-            <button onclick="resetSetup()" style="background:transparent; border:1px solid #555; color:#888; padding:5px 10px; font-family:'Oswald';">RESET</button>
+            <div>DEPLOY: <strong id="ship-name-display" style="color:var(--yellow); font-size: 1.2rem;">...</strong></div>
+            <button onclick="resetSetup()" style="background:transparent; border:1px solid #555; color:#888; padding:5px 10px; font-size: 0.8rem;">RESET</button>
         </div>
         
         <div class="grid-wrapper">
@@ -168,46 +216,45 @@
         </div>
 
         <div style="width:100%; max-width:600px; display:flex; gap:10px; margin-bottom: 10px; flex-shrink: 0;">
-            <button class="big-btn" style="flex:1; background:#444;" onclick="toggleAxis()">Rotate: <span id="axis-display">HORIZ</span></button>
+            <button class="big-btn" style="flex:1; background:#333; font-size: 1rem;" onclick="toggleAxis()">Rotate: <span id="axis-display" style="color:var(--yellow)">HORIZ</span></button>
             <button class="big-btn" style="flex:1; display:none; background:var(--green); color:black;" id="confirm-btn" onclick="finalizeSetup()">CONFIRM</button>
         </div>
-        <div id="setup-msg" style="color: #666; font-size: 0.8rem; margin-bottom: 5px;">TAP GRID TO PLACE SHIP</div>
+        <div id="setup-msg" style="color: #666; font-size: 0.8rem; margin-bottom: 5px; text-transform: uppercase;">Tap grid to position fleet</div>
     </div>
 
+    <!-- 4. GAMEPLAY -->
     <div id="screen-game" class="screen">
         <div class="hud">
-            <div id="conn-status" style="color:var(--green); font-weight:bold;">● ONLINE</div>
+            <div id="conn-status" style="color:var(--green); font-weight:bold; font-size: 0.9rem;">● SECURE LINK</div>
             <div id="turn-display" style="font-size: 1.2rem; letter-spacing: 1px;">WAITING...</div>
         </div>
 
         <div class="tab-controls">
-            <button class="tab-btn active" onclick="setTab('radar')" id="btn-radar">RADAR</button>
-            <button class="tab-btn" onclick="setTab('fleet')" id="btn-fleet">FLEET</button>
+            <button class="tab-btn active" onclick="setTab('radar')" id="btn-radar">RADAR (ATTACK)</button>
+            <button class="tab-btn" onclick="setTab('fleet')" id="btn-fleet">FLEET (DEFEND)</button>
         </div>
 
+        <!-- RADAR VIEW -->
         <div class="game-view active" id="view-radar">
             <div class="grid-wrapper">
                 <div class="grid radar" id="radar-grid"></div>
             </div>
-            <div style="text-align:center; color:#666; margin:5px; font-size: 0.8rem;">TAP ENEMY SECTOR TO FIRE</div>
+            <div style="text-align:center; color:#555; margin:5px; font-size: 0.7rem; letter-spacing: 1px;">TAP ENEMY SECTOR TO FIRE</div>
         </div>
 
+        <!-- FLEET VIEW -->
         <div class="game-view" id="view-fleet">
             <div class="grid-wrapper">
                 <div class="grid fleet" id="fleet-grid"></div>
             </div>
-            <div style="text-align:center; color:#666; margin:5px; font-size: 0.8rem;">DEFENSIVE MONITORING</div>
+            <div style="text-align:center; color:#555; margin:5px; font-size: 0.7rem; letter-spacing: 1px;">MONITORING HULL INTEGRITY</div>
         </div>
     </div>
 
     <script>
-        // --- CONFIG ---
         const SHIP_DATA = [
-            { name: "THE PROFESSOR", size: 5 },
-            { name: "BERLIN", size: 4 },
-            { name: "TOKYO", size: 3 },
-            { name: "NAIROBI", size: 3 },
-            { name: "RIO", size: 2 }
+            { name: "THE PROFESSOR", size: 5 }, { name: "BERLIN", size: 4 },
+            { name: "TOKYO", size: 3 }, { name: "NAIROBI", size: 3 }, { name: "RIO", size: 2 }
         ];
 
         let peer, conn, mySide, myTurn = false, isConnected = false, heartbeatInterval;
@@ -216,37 +263,38 @@
         const rows = ['A','B','C','D','E','F','G','H'];
         const cols = 12;
 
-        // --- COPY ID ---
         function copyId() {
             const el = document.getElementById('host-id-display');
             if(el.innerText === 'Generating...') return;
-            const textToCopy = el.getAttribute('data-raw-id') || el.innerText;
+            const textToCopy = el.innerText;
             navigator.clipboard.writeText(textToCopy).then(() => {
                 const original = el.innerText;
-                el.innerText = "COPIED!";
-                el.style.color = "white";
-                el.style.borderColor = "white";
-                setTimeout(() => {
-                    el.innerText = original;
-                    el.style.color = "var(--green)";
-                    el.style.borderColor = "#555";
-                }, 1500);
+                el.innerText = "COPIED!"; el.style.color = "white"; el.style.borderColor = "white";
+                setTimeout(() => { el.innerText = original; el.style.color = "var(--green)"; el.style.borderColor = "#333"; }, 1500);
             });
         }
 
-        // --- NETWORK ---
-        function initPeer(id = null) {
-            peer = new Peer(id);
+        // --- CONNECTION LOGIC ---
+        function initPeer(customId = null) {
+            if(mySide === 'host' && !customId) customId = 'HEIST-' + Math.floor(1000 + Math.random() * 9000);
+
+            peer = new Peer(customId);
+
             peer.on('open', (id) => {
                 if(mySide === 'host') {
-                    const disp = document.getElementById('host-id-display');
-                    disp.innerText = id;
-                    disp.setAttribute('data-raw-id', id);
+                    document.getElementById('host-id-display').innerText = id;
                     switchScreen('screen-wait');
                 }
             });
+
             peer.on('connection', (c) => handleConnection(c));
-            peer.on('error', (err) => alert("Net Error: " + err));
+            
+            peer.on('error', (err) => {
+                console.error(err);
+                if(err.type === 'peer-unavailable') { alert("Player ID not found."); resetJoinButton(); }
+                else if (err.type === 'unavailable-id') { initPeer(); } 
+                else { alert("Net Error: " + err.type); resetJoinButton(); }
+            });
         }
 
         function handleConnection(c) {
@@ -262,7 +310,9 @@
                 }
             });
             conn.on('data', (data) => handleData(data));
-            conn.on('close', () => { isConnected = false; alert("Opponent Disconnected"); });
+            conn.on('close', () => { 
+                isConnected = false; alert("Opponent Disconnected"); location.reload(); 
+            });
         }
 
         function startHeartbeat() {
@@ -271,30 +321,41 @@
         }
 
         function hostGame() { mySide = 'host'; myTurn = true; initPeer(); }
+
         function joinGame() { 
-            const id = document.getElementById('join-id').value.trim();
+            const input = document.getElementById('join-id');
+            const btn = document.getElementById('join-btn');
+            const id = input.value.trim().toUpperCase();
             if(!id) return alert("Enter ID");
+            btn.innerText = "SEARCHING..."; btn.disabled = true;
             mySide = 'client'; myTurn = false; 
             peer = new Peer(); 
-            peer.on('open', () => handleConnection(peer.connect(id)));
+            peer.on('open', () => {
+                const c = peer.connect(id);
+                handleConnection(c);
+                setTimeout(() => { if(!isConnected) { alert("Timeout. Player offline?"); resetJoinButton(); } }, 5000);
+            });
+        }
+
+        function resetJoinButton() {
+            const btn = document.getElementById('join-btn');
+            btn.innerText = "CONNECT"; btn.disabled = false;
         }
 
         function send(payload) { if(conn && conn.open) conn.send(payload); }
 
         function handleData(data) {
             if(data.type === 'PING') return;
-            
             if(data.type === 'READY') {
                 opponentReady = true;
                 const msg = document.getElementById('setup-msg');
-                msg.innerText = "OPPONENT IS READY.";
-                msg.style.color = "var(--green)";
+                msg.innerText = "OPPONENT IS READY."; msg.style.color = "var(--green)";
                 if(mySide === 'host') tryStartGame();
             }
             if(data.type === 'START') initGameUI();
             if(data.type === 'FIRE') processIncomingAttack(data.coord);
             if(data.type === 'RESULT') processAttackResult(data);
-            if(data.type === 'GAMEOVER') showOverlay("VICTORY", "ENEMY FLEET ELIMINATED", "status-win", 10000);
+            if(data.type === 'GAMEOVER') showOverlay("VICTORY", "THE HEIST IS SUCCESSFUL", "status-win", 0);
         }
 
         // --- GAME LOGIC ---
@@ -307,18 +368,19 @@
                     break;
                 }
             }
-
             const result = hitShip ? 'hit' : 'miss';
-            const msg = isSunk ? `SUNK: ${hitShip.name}` : (hitShip ? "IMPACT!" : "SAFE");
+            const msg = isSunk ? `${hitShip.name}` : (hitShip ? "IMPACT!" : "SAFE");
+            const status = hitShip ? (isSunk ? "status-sunk" : "status-hit") : "status-miss";
             
-            showOverlay(coord, msg, hitShip ? (isSunk ? "status-sunk" : "status-hit") : "status-miss");
+            showOverlay(coord, msg, status);
+            
             const cell = document.getElementById(`fleet-${coord}`);
             if(cell) cell.classList.add(result);
 
             send({ type: 'RESULT', coord: coord, hit: !!hitShip, sunkName: isSunk ? hitShip.name : null });
 
             if(totalMyShipsLost === SHIP_DATA.length) {
-                setTimeout(() => { send({ type: 'GAMEOVER' }); showOverlay("DEFEAT", "FLEET DESTROYED", "status-hit", 10000); }, 2000);
+                setTimeout(() => { send({ type: 'GAMEOVER' }); showOverlay("DEFEAT", "FLEET DESTROYED", "status-hit", 0); }, 2000);
             }
             setTurn(true);
         }
@@ -375,8 +437,7 @@
         function finalizeSetup() {
             amIReady = true;
             const btn = document.getElementById('confirm-btn');
-            btn.innerText = "WAITING FOR OPPONENT...";
-            btn.disabled = true;
+            btn.innerText = "WAITING..."; btn.disabled = true;
             send({ type: 'READY' });
             if(mySide === 'host') tryStartGame();
             else document.getElementById('setup-msg').innerText = "Waiting for host to launch...";
@@ -389,7 +450,6 @@
             }
         }
 
-        // --- UI UTILS ---
         function initGameUI() {
             switchScreen('screen-game');
             createGrid('radar-grid', 'radar', (r, c) => handleFire(r, c));
@@ -449,16 +509,21 @@
             const s = document.getElementById('anim-sub');
             s.innerText = sub; s.className = `overlay-status ${statusClass}`;
             
-            // Screen Flash Logic
-            if(statusClass === 'status-hit' || statusClass === 'status-sunk') {
-                document.body.classList.add('damage-flash');
+            // Show restart button ONLY if infinite duration (0)
+            if (duration === 0) {
+                document.getElementById('restart-btn').classList.add('visible');
+            } else {
+                document.getElementById('restart-btn').classList.remove('visible');
             }
 
             ol.classList.add('active');
-            setTimeout(() => {
-                ol.classList.remove('active');
-                document.body.classList.remove('damage-flash');
-            }, duration);
+            
+            // If duration is 0, we do NOT remove it (it's permanent)
+            if (duration > 0) {
+                setTimeout(() => {
+                    ol.classList.remove('active');
+                }, duration);
+            }
         }
 
         function setTab(view) {
