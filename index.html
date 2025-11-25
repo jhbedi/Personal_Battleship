@@ -76,35 +76,25 @@
             font-family: 'Oswald', sans-serif; transition: 0.1s; border-radius: 2px;
         }
 
-        /* --- CLEANER STATES (No Excess Glow) --- */
-        
-        /* Setup */
+        /* --- CLEANER STATES --- */
         .cell.occupied { background: #444 !important; border: 1px solid #666; }
         .cell.preview { background: #333 !important; border: 1px dashed var(--yellow); opacity: 0.8; }
 
-        /* Hits - Flat, Matte Red */
         .cell.hit { 
-            background: var(--red) !important; 
-            color: white; 
-            border: 1px solid rgba(255,255,255,0.5); 
-            z-index: 2;
+            background: var(--red) !important; color: white; 
+            border: 1px solid rgba(255,255,255,0.5); z-index: 2;
         }
 
-        /* Misses - Flat Green/Blue */
         .cell.miss { 
-            background: rgba(46, 204, 113, 0.15) !important; 
-            color: transparent; /* Hide text for cleaner look */
+            background: rgba(46, 204, 113, 0.15) !important; color: transparent; 
             border: 1px solid rgba(46, 204, 113, 0.3);
         }
-        /* Add a dot for misses */
         .cell.miss::after {
             content: ''; width: 6px; height: 6px; background: var(--green); border-radius: 50%; opacity: 0.5;
         }
 
-        /* Pending */
         .cell.pending { 
-            background: rgba(241, 196, 15, 0.2) !important; 
-            border: 1px dashed var(--yellow);
+            background: rgba(241, 196, 15, 0.2) !important; border: 1px dashed var(--yellow);
         }
 
         /* --- HUD --- */
@@ -162,7 +152,7 @@
 
         .restart-btn {
             margin-top: 30px; padding: 15px 30px; background: transparent; 
-            border: 1px solid #555; color: #fff; font-size: 1.2rem; display: none;
+            border: 1px solid #555; color: #fff; font-size: 1.2rem; display: none; cursor: pointer;
         }
         .restart-btn.visible { display: block; }
         .restart-btn:hover { background: white; color: black; }
@@ -269,8 +259,9 @@
         let currentShipIdx = 0, isHorizontal = true, myShips = [], totalMyShipsLost = 0;
         let amIReady = false, opponentReady = false;
         
-        // --- TIMEOUT FIX: Global variable to track overlay timer ---
+        // --- CRITICAL VARIABLES ---
         let overlayTimeout;
+        let gameEnded = false; // FLAG TO PREVENT VICTORY SCREEN DISAPPEARING
 
         const rows = ['A','B','C','D','E','F','G','H'];
         const cols = 12;
@@ -367,7 +358,12 @@
             if(data.type === 'START') initGameUI();
             if(data.type === 'FIRE') processIncomingAttack(data.coord);
             if(data.type === 'RESULT') processAttackResult(data);
-            if(data.type === 'GAMEOVER') showOverlay("VICTORY", "THE HEIST IS SUCCESSFUL", "status-win", 0);
+            
+            // WINNER HANDLING
+            if(data.type === 'GAMEOVER') {
+                gameEnded = true; // LOCK THE SCREEN
+                showOverlay("VICTORY", "ALL THE SHIPS HAVE BEEN DESTROYED", "status-win", 0);
+            }
         }
 
         // --- GAME LOGIC ---
@@ -392,7 +388,12 @@
             send({ type: 'RESULT', coord: coord, hit: !!hitShip, sunkName: isSunk ? hitShip.name : null });
 
             if(totalMyShipsLost === SHIP_DATA.length) {
-                setTimeout(() => { send({ type: 'GAMEOVER' }); showOverlay("DEFEAT", "FLEET DESTROYED", "status-hit", 0); }, 2000);
+                // DEFEAT HANDLING
+                gameEnded = true; // LOCK THE SCREEN
+                setTimeout(() => { 
+                    send({ type: 'GAMEOVER' }); 
+                    showOverlay("DEFEAT", "FLEET DESTROYED", "status-hit", 0); 
+                }, 2000);
             }
             setTurn(true);
         }
@@ -516,10 +517,16 @@
         }
 
         function showOverlay(main, sub, statusClass, duration = 1500) {
+            // CRITICAL FIX: IF GAME ENDED AND THIS IS NOT THE PERMANENT SCREEN, IGNORE IT
+            if(gameEnded && duration > 0) return;
+
             const ol = document.getElementById('anim-overlay');
             
-            // --- FIX: CLEAR PREVIOUS TIMEOUT ---
-            if(overlayTimeout) clearTimeout(overlayTimeout);
+            // Clear any existing timeout so the screen doesn't disappear unexpectedly
+            if(overlayTimeout) {
+                clearTimeout(overlayTimeout);
+                overlayTimeout = null;
+            }
 
             document.getElementById('anim-main').innerText = main;
             const s = document.getElementById('anim-sub');
@@ -541,7 +548,7 @@
 
             ol.classList.add('active');
             
-            // If duration is 0, we do NOT remove it (it's permanent)
+            // If duration is 0, we do NOT set a timeout to remove it
             if (duration > 0) {
                 overlayTimeout = setTimeout(() => {
                     ol.classList.remove('active');
