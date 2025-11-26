@@ -76,9 +76,15 @@
             font-family: 'Oswald', sans-serif; transition: 0.1s; border-radius: 2px;
         }
 
-        /* --- CLEANER STATES --- */
+        /* --- STATES --- */
         .cell.occupied { background: #444 !important; border: 1px solid #666; }
         .cell.preview { background: #333 !important; border: 1px dashed var(--yellow); opacity: 0.8; }
+
+        .cell.my-ship { 
+            background: #444 !important; 
+            border: 1px solid #777; 
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+        }
 
         .cell.hit { 
             background: var(--red) !important; color: white; 
@@ -139,7 +145,6 @@
         .status-hit { color: var(--red); }
         .status-miss { color: var(--blue); }
         
-        /* VICTORY/DEFEAT PERMANENT SCREEN */
         .status-win { 
             color: var(--yellow); font-size: 10vw; 
             animation: victory-scale 0.8s ease-out forwards;
@@ -157,7 +162,6 @@
         .restart-btn.visible { display: block; }
         .restart-btn:hover { background: white; color: black; }
 
-        /* Screen Flash for Damage */
         body.damage-flash::after {
             content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: radial-gradient(circle, transparent 50%, rgba(192, 57, 43, 0.4) 100%);
@@ -258,13 +262,28 @@
         let peer, conn, mySide, myTurn = false, isConnected = false, heartbeatInterval;
         let currentShipIdx = 0, isHorizontal = true, myShips = [], totalMyShipsLost = 0;
         let amIReady = false, opponentReady = false;
-        
-        // --- CRITICAL VARIABLES ---
         let overlayTimeout;
-        let gameEnded = false; // FLAG TO PREVENT VICTORY SCREEN DISAPPEARING
+        let gameEnded = false; 
 
         const rows = ['A','B','C','D','E','F','G','H'];
         const cols = 12;
+
+        // --- NETWORKING CONFIGURATION ---
+        // Enhanced ICE Servers to penetrate NAT/Firewalls
+        const PEER_CONFIG = {
+            debug: 2,
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:stun3.l.google.com:19302' },
+                    { urls: 'stun:stun4.l.google.com:19302' },
+                    { urls: 'stun:global.stun.twilio.com:3478' }
+                ],
+                iceCandidatePoolSize: 10,
+            }
+        };
 
         function copyId() {
             const el = document.getElementById('host-id-display');
@@ -281,7 +300,7 @@
         function initPeer(customId = null) {
             if(mySide === 'host' && !customId) customId = 'HEIST-' + Math.floor(1000 + Math.random() * 9000);
 
-            peer = new Peer(customId);
+            peer = new Peer(customId, PEER_CONFIG);
 
             peer.on('open', (id) => {
                 if(mySide === 'host') {
@@ -294,9 +313,9 @@
             
             peer.on('error', (err) => {
                 console.error(err);
-                if(err.type === 'peer-unavailable') { alert("Player ID not found."); resetJoinButton(); }
-                else if (err.type === 'unavailable-id') { initPeer(); } 
-                else { alert("Net Error: " + err.type); resetJoinButton(); }
+                if(err.type === 'peer-unavailable') { alert("ID not found. Player might be offline or on a strict network."); resetJoinButton(); }
+                else if (err.type === 'unavailable-id') { initPeer(); } // Retry ID gen
+                else { alert("Connection Error: " + err.type); resetJoinButton(); }
             });
         }
 
@@ -314,12 +333,13 @@
             });
             conn.on('data', (data) => handleData(data));
             conn.on('close', () => { 
-                isConnected = false; alert("Opponent Disconnected"); location.reload(); 
+                isConnected = false; alert("Connection Lost. Opponent Disconnected."); location.reload(); 
             });
         }
 
         function startHeartbeat() {
             if(heartbeatInterval) clearInterval(heartbeatInterval);
+            // Send keep-alive every 2 seconds
             heartbeatInterval = setInterval(() => { if(conn && conn.open) conn.send({ type: 'PING' }); }, 2000);
         }
 
@@ -332,11 +352,13 @@
             if(!id) return alert("Enter ID");
             btn.innerText = "SEARCHING..."; btn.disabled = true;
             mySide = 'client'; myTurn = false; 
-            peer = new Peer(); 
+            
+            peer = new Peer(null, PEER_CONFIG); 
+            
             peer.on('open', () => {
-                const c = peer.connect(id);
+                const c = peer.connect(id, { reliable: true });
                 handleConnection(c);
-                setTimeout(() => { if(!isConnected) { alert("Timeout. Player offline?"); resetJoinButton(); } }, 5000);
+                setTimeout(() => { if(!isConnected) { alert("Connection Timeout. Try using the same WiFi network if possible."); resetJoinButton(); } }, 8000);
             });
         }
 
@@ -359,10 +381,9 @@
             if(data.type === 'FIRE') processIncomingAttack(data.coord);
             if(data.type === 'RESULT') processAttackResult(data);
             
-            // WINNER HANDLING
             if(data.type === 'GAMEOVER') {
-                gameEnded = true; // LOCK THE SCREEN
-                showOverlay("VICTORY", "ALL THE SHIPS HAVE BEEN DESTROYED", "status-win", 0);
+                gameEnded = true; 
+                showOverlay("VICTORY", "THE HEIST IS SUCCESSFUL", "status-win", 0);
             }
         }
 
@@ -388,8 +409,7 @@
             send({ type: 'RESULT', coord: coord, hit: !!hitShip, sunkName: isSunk ? hitShip.name : null });
 
             if(totalMyShipsLost === SHIP_DATA.length) {
-                // DEFEAT HANDLING
-                gameEnded = true; // LOCK THE SCREEN
+                gameEnded = true; 
                 setTimeout(() => { 
                     send({ type: 'GAMEOVER' }); 
                     showOverlay("DEFEAT", "FLEET DESTROYED", "status-hit", 0); 
@@ -517,12 +537,10 @@
         }
 
         function showOverlay(main, sub, statusClass, duration = 1500) {
-            // CRITICAL FIX: IF GAME ENDED AND THIS IS NOT THE PERMANENT SCREEN, IGNORE IT
             if(gameEnded && duration > 0) return;
 
             const ol = document.getElementById('anim-overlay');
             
-            // Clear any existing timeout so the screen doesn't disappear unexpectedly
             if(overlayTimeout) {
                 clearTimeout(overlayTimeout);
                 overlayTimeout = null;
@@ -532,14 +550,12 @@
             const s = document.getElementById('anim-sub');
             s.innerText = sub; s.className = `overlay-status ${statusClass}`;
             
-            // Show restart button ONLY if infinite duration (0)
             if (duration === 0) {
                 document.getElementById('restart-btn').classList.add('visible');
             } else {
                 document.getElementById('restart-btn').classList.remove('visible');
             }
 
-            // Screen Flash logic
             if(statusClass === 'status-hit' || statusClass === 'status-sunk') {
                 document.body.classList.add('damage-flash');
             } else {
@@ -548,7 +564,6 @@
 
             ol.classList.add('active');
             
-            // If duration is 0, we do NOT set a timeout to remove it
             if (duration > 0) {
                 overlayTimeout = setTimeout(() => {
                     ol.classList.remove('active');
