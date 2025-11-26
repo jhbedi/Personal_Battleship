@@ -76,7 +76,7 @@
             font-family: 'Oswald', sans-serif; transition: 0.1s; border-radius: 2px;
         }
 
-        /* --- STATES --- */
+        /* --- CLEANER STATES --- */
         .cell.occupied { background: #444 !important; border: 1px solid #666; }
         .cell.preview { background: #333 !important; border: 1px dashed var(--yellow); opacity: 0.8; }
 
@@ -145,6 +145,7 @@
         .status-hit { color: var(--red); }
         .status-miss { color: var(--blue); }
         
+        /* VICTORY/DEFEAT PERMANENT SCREEN */
         .status-win { 
             color: var(--yellow); font-size: 10vw; 
             animation: victory-scale 0.8s ease-out forwards;
@@ -162,6 +163,7 @@
         .restart-btn.visible { display: block; }
         .restart-btn:hover { background: white; color: black; }
 
+        /* Screen Flash for Damage */
         body.damage-flash::after {
             content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: radial-gradient(circle, transparent 50%, rgba(192, 57, 43, 0.4) 100%);
@@ -263,7 +265,8 @@
         let currentShipIdx = 0, isHorizontal = true, myShips = [], totalMyShipsLost = 0;
         let amIReady = false, opponentReady = false;
         let overlayTimeout;
-        let gameEnded = false; 
+        let gameEnded = false;
+        let connectionRetries = 0; // Retry counter
 
         const rows = ['A','B','C','D','E','F','G','H'];
         const cols = 12;
@@ -313,8 +316,8 @@
             
             peer.on('error', (err) => {
                 console.error(err);
-                if(err.type === 'peer-unavailable') { alert("ID not found. Player might be offline or on a strict network."); resetJoinButton(); }
-                else if (err.type === 'unavailable-id') { initPeer(); } // Retry ID gen
+                if(err.type === 'peer-unavailable') { alert("ID not found. Check ID or try again (User might be on different network type)."); resetJoinButton(); }
+                else if (err.type === 'unavailable-id') { initPeer(); } 
                 else { alert("Connection Error: " + err.type); resetJoinButton(); }
             });
         }
@@ -339,7 +342,6 @@
 
         function startHeartbeat() {
             if(heartbeatInterval) clearInterval(heartbeatInterval);
-            // Send keep-alive every 2 seconds
             heartbeatInterval = setInterval(() => { if(conn && conn.open) conn.send({ type: 'PING' }); }, 2000);
         }
 
@@ -350,15 +352,51 @@
             const btn = document.getElementById('join-btn');
             const id = input.value.trim().toUpperCase();
             if(!id) return alert("Enter ID");
-            btn.innerText = "SEARCHING..."; btn.disabled = true;
-            mySide = 'client'; myTurn = false; 
             
+            btn.disabled = true;
+            mySide = 'client'; myTurn = false; 
+            connectionRetries = 0;
+            
+            attemptConnection(id, btn);
+        }
+
+        function attemptConnection(id, btn) {
+            connectionRetries++;
+            btn.innerText = `SEARCHING... (${connectionRetries}/3)`;
+            
+            // Destroy old peer instance if retrying
+            if(peer) peer.destroy();
+
             peer = new Peer(null, PEER_CONFIG); 
             
             peer.on('open', () => {
+                btn.innerText = "NEGOTIATING...";
                 const c = peer.connect(id, { reliable: true });
+                
+                // If connection opens, great.
                 handleConnection(c);
-                setTimeout(() => { if(!isConnected) { alert("Connection Timeout. Try using the same WiFi network if possible."); resetJoinButton(); } }, 8000);
+                
+                // If it takes too long, retry or fail.
+                setTimeout(() => { 
+                    if(!isConnected) {
+                        if(connectionRetries < 3) {
+                            console.log("Retrying connection...");
+                            attemptConnection(id, btn);
+                        } else {
+                            alert("Connection Failed. Firewall likely blocking P2P. Try using the same WiFi or Mobile Hotspot."); 
+                            resetJoinButton(); 
+                        }
+                    } 
+                }, 15000); // 15s Timeout per attempt
+            });
+
+            peer.on('error', (err) => {
+                console.log("Peer Error:", err);
+                // If peer unavailable, fail immediately
+                if(err.type === 'peer-unavailable') {
+                    alert("Player ID not found. They might be offline.");
+                    resetJoinButton();
+                }
             });
         }
 
